@@ -1,0 +1,8 @@
+{
+    name: "nuke"
+    version: "0.1.0"
+    description: "An explosive Nushell replacement for make and Makefiles"
+    license: "https://github.com/amtoine/nuke/blob/main/LICENSE"
+    type: "script"
+    scripts: ["nuke"]
+}
