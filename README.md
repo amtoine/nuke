@@ -1,6 +1,17 @@
 # nuke
 An explosive Nushell replacement for make and Makefiles
 
+## installation
+with `nupm` (recommended)
+
+- download [`nupm`](https://github.com/nushell/nupm)
+- run
+```nushell
+use /path/to/nupm/
+nupm install --path .
+```
+- add `$env.NUPM_HOME | path join "bin"` to your `$env.PATH`
+
 ## example of a Nukefile
 ```nushell
 const CLIPPY_OPTIONS = ["-D", "warnings"]
