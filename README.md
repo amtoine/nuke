@@ -30,3 +30,13 @@ const CLIPPY_OPTIONS = ["-D", "warnings"]
     clean: { cargo clean }
 }
 ```
+
+## introduce `nuke` to Nushell
+```nushell
+def "nu-complete list-rules" [] {
+    let nuke = source Nukefile
+    $nuke | columns
+}
+
+extern nuke [...rules: string@"nu-complete list-rules"]
+```
