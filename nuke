@@ -1,0 +1,132 @@
+#!/usr/bin/env nu
+
+def pretty-closure [] {
+    str trim -c "{"
+        | str trim -r -c "}"
+        | str trim
+        | lines
+        | each { str trim }
+        | str join "\n"
+        | nu-highlight
+}
+
+def type-of [value: any]: nothing -> string {
+    $value | describe | str replace --regex "<.*" ""
+}
+
+def check-nuke [nuke: any] {
+    if (type-of $nuke) != "record" {
+        error make --unspanned {
+            msg: $"(ansi red_bold)invalid_nukefile(ansi reset)
+                Nukefile should return a record."
+        }
+    }
+
+    let rules = $nuke | columns
+
+    $nuke | transpose name body | each {|rule|
+        match (type-of $rule.body) {
+            "closure" => {},
+            "list" => {
+                $rule.body | enumerate | each {|it|
+                    match (type-of $it.item) {
+                        "closure" => {},
+                        "string" => {
+                            if $it.item not-in $rules {
+                                error make --unspanned {
+                                    msg: $"(ansi red_bold)invalid_nukefile(ansi reset)
+                unknown rule for ($rule.name) at index ($it.index), expected either one of ($rules), found ($it.item)."
+                                }
+                            }
+                        },
+                        _ => {
+                            error make --unspanned {
+                                msg: $"(ansi red_bold)invalid_nukefile(ansi reset)
+                unexpected type for ($rule.name) at index ($it.index), expected either string or closure, found (type-of $it.item)."
+                            }
+                        },
+                    }
+                }
+            },
+            _ => {
+                error make --unspanned {
+                    msg: $"(ansi red_bold)invalid_nukefile(ansi reset)
+                unexpected type for ($rule.name), expected either list or closure, found (type-of $rule.body)."
+                }
+            },
+        }
+    }
+}
+
+def get-nuke []: nothing -> record {
+    if not ("Nukefile" | path exists) {
+        error make --unspanned {
+            msg: $"(ansi red_bold)nukefile_not_found(ansi reset)
+                one needs a Nukefile to nuke a project."
+        }
+    }
+
+    let nuke = source Nukefile
+
+    check-nuke $nuke
+
+    $nuke
+}
+
+# takes a recursive nuke and give back a table of closures to run
+#
+# the exact output shape is `table<name: string, body: closure>`
+def flatten-nuke [nuke: record, rules: list<string>]: nothing -> table {
+    def aux [nuke: record, rule: string]: nothing -> table {
+        let body = $nuke | get $rule
+
+        match (type-of $body) {
+            "closure" => {
+                {
+                    name: $rule
+                    body: $body
+                }
+            },
+            "list" => {
+                $body | enumerate | each {|it|
+                    match (type-of $it.item) {
+                        "closure" => {
+                            {
+                                name: $"($rule).($it.index)"
+                                body: ($body | get $it.index)
+                            }
+                        },
+                        "string" => {
+                            aux $nuke $it.item | each { update name { $"($rule).($it.index).($in)" } }
+                        },
+                    }
+                }
+            },
+        }
+    }
+
+    $rules | each {|rule| aux $nuke $rule | flatten} | flatten | flatten
+}
+
+def main [...rules: string]: nothing -> nothing {
+    let nuke = get-nuke
+
+    for rule in $rules {
+        if $rule not-in ($nuke | columns) {
+            let span = metadata $rule | get span
+            error make {
+                msg: $"(ansi red_bold)invalid(ansi reset)"
+                label: {
+                    text: $"not a valid rule, expected one of ($nuke | columns)"
+                    start: $span.start
+                    end: $span.end
+                }
+            }
+        }
+    }
+
+    for $x in (flatten-nuke $nuke $rules) {
+        print $"(ansi red)($x.name)(ansi reset):\n(view source ($x.body) | pretty-closure)"
+        do $x.body
+    }
+}
